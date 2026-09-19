@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "license": "MIT",
   "workspaces": [
     "frontend"
   ],
@@ -13,8 +14,9 @@
     "lint:fix": "eslint \"frontend/src/**/*.{js,ts,tsx}\"",
     "format": "prettier --write \"frontend/src/**/*.{js,ts,tsx}\"",
     "format:check": "prettier --check \"frontend/src/**/*.{js,ts,tsx}\"",
-    "prepare": "husky install",
-    "typecheck": "tsc --noEmit"
+    "prepare": "husky",
+    "typecheck": "npm run typecheck --workspace=frontend",
+    "release": "semantic-release"
   },
   "dependencies": {
     "@types/react": "^19.0.8",
@@ -29,7 +31,13 @@
     ]
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
     "@eslint/js": "^9.21.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.3",
+    "@semantic-release/npm": "^12.0.2",
     "@typescript-eslint/eslint-plugin": "^8.23.0",
     "@typescript-eslint/parser": "^8.23.0",
     "eslint": "^9.20.0",
@@ -39,6 +47,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.4.3",
-    "prettier": "^3.5.0"
+    "prettier": "^3.5.0",
+    "semantic-release": "^24.2.3"
   }
 }

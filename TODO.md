@@ -1,15 +1,13 @@
-- Docstring Doc generation
+- Docstring generation
 
-- handleSquareSelection 
-
-- Pause not working 
-
-- Mobile View
-
-- ✅ implement Game UI
-    - timer, turn count, turn player, score(s), ...
+- Mobile view
 
 - play modi
-    - ✅ play vs self (camera flips to show board from current player's perspective)
-    - play vs bot (RL)
-    - play vs other user
+    - play vs self (camera flips)
+    - play vs bot (Stockfish, Phase 2)
+    - play vs other user (Phase 4)
+
+- Presentation (Phase 1)
+    - piece move animation
+    - camera tween
+    - menu_background.png

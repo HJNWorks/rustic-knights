@@ -24,7 +24,9 @@ export default [
         WebSocket: "readonly",
         HTMLElement: "readonly",
         HTMLCanvasElement: "readonly",
-        CanvasRenderingContext2D: "readonly"
+        CanvasRenderingContext2D: "readonly",
+        URLSearchParams: "readonly",
+        HTMLDivElement: "readonly"
       }
     },
     plugins: {

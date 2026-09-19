@@ -7,7 +7,6 @@
     - play vs bot (Stockfish, Phase 2)
     - play vs other user (Phase 4)
 
-- Presentation (Phase 1)
-    - piece move animation
-    - camera tween
+- Presentation leftovers
     - menu_background.png
+    - explicit camera.fov

@@ -1,32 +1,22 @@
 # Animations
 
-## Current
+## Current (Phase 1)
 
-Piece movement is an instant teleport in `Board.movePiece` (mesh `position.x` / `position.z` assigned). No `Animation`, `AnimationGroup`, or tween helper.
+`ChessGame.play` commits first. `Board.applyLegalMove` then plays Babylon tweens from `frontend/src/game/rendering/tween.ts` (~200 ms, cubic ease-out, 12 frames at 60 fps). `GameScene.animating` ignores picks until the move and camera tween finish.
 
-Capture: the captured mesh is disposed or hidden immediately (no fade).
+1. Quiet move: lerp mesh x/z, hold y.
+2. Capture: scale the captured mesh to 0 over the same window, then dispose. Shared materials are not faded.
+3. Castling: king lerp and rook lerp in parallel.
+4. En passant: mover lerp plus scale-out of the pawn on `flags.enPassantCapture`.
+5. Promotion: arrive on the last rank, then swap the mesh type.
+6. Camera: copy the outgoing pose onto the incoming `ArcRotateCamera`, tween alpha/beta/radius to that side's default (~250 ms), restore alpha limits, then `attachControl`.
 
-Camera: `flipCamera` detaches controls and swaps `activeCamera`. No interpolation of alpha/beta/radius.
+`Board.movePiece` still teleports. Live play uses `applyLegalMove`.
 
-CSS only: Radix modal `overlayShow` / `contentShow` keyframes. Button hover `translateY(-2px)`.
+CSS: Radix modal `overlayShow` / `contentShow`. Button hover `translateY(-2px)`. Piece hover scale 1.1 remains discrete.
 
-`Piece` hover scales mesh to 1.1. Pick trigger scales to 1.2. These are discrete assignments, not Babylon animations.
+## Later
 
-## Target (Phase 1)
-
-Drive motion from a legal move result (UCI + flags from chessops), not from picking.
-
-1. **Move lerp** - 150-250 ms translation of the moving mesh along x/z. Keep y constant. Ease-out.
-2. **Capture** - captured piece scales to 0 or fades alpha over the same window, then dispose.
-3. **Castling** - king lerp plus rook lerp (two meshes, same duration).
-4. **En passant** - move pawn, fade the captured pawn on the adjacent square (not the destination).
-5. **Promotion** - arrive on last rank, then swap mesh type (instant swap is acceptable for v1).
-6. **Camera** - optional. Animate alpha/beta/radius toward the other side's default instead of swapping camera objects. If two cameras stay, cross-fade is not required.
-
-Input: ignore picks while an animation is running (`animating` flag on `GameScene`).
-
-Do not animate illegal or rolled-back moves. The adapter commits first, then the view plays. If a later server reject happens (Phase 4), snap back without a reverse animation.
-
-Stockfish moves use the same animation path as human moves.
+Stockfish (Phase 2) uses the same `commitMove` / `applyLegalMove` path. Phase 4 server rejects snap back without a reverse animation.
 
 Out of scope: piece idle bob, cloth, particles on capture.

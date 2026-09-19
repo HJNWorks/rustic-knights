@@ -5,6 +5,7 @@ import { Square } from './Square';
 import { Piece, createPiece } from './Piece';
 import { Position, ChessPieceType, SquareHighlightState, PlayedMoveFlags } from '../../types/chess';
 import { BOARD_SIZE, SQUARE_SIZE, BOARD_OFFSET, COLORS } from '../../util/constants';
+import { animateMeshTo, animateScaleToZero } from '../rendering/tween';
 
 export class Board {
   private squares: Map<string, Square> = new Map();
@@ -31,7 +32,7 @@ export class Board {
 
     if (this.squares.size === 0) {
       this.createVisualBoard();
-      this.createInitialPieces();
+      this.createPieceMaterials();
     } else {
       console.log('Using pre-initialized squares map with size:', this.squares.size);
     }
@@ -269,50 +270,144 @@ export class Board {
     if (!piece) return false;
 
     const capturedPiece = toSquare.getPiece();
-    if (capturedPiece) {
+    if (capturedPiece && capturedPiece !== piece) {
       this.removePiece(capturedPiece);
     }
 
-    // Update the piece's mesh position to match the target square
+    this.reassignPiece(piece, fromPos, toPos);
     const mesh = piece.getMesh();
     if (mesh) {
       mesh.position.x = toSquare.getMesh().position.x;
       mesh.position.z = toSquare.getMesh().position.z;
     }
 
-    // Update the piece's logical position and square references
-    fromSquare.setPiece(null);
-    toSquare.setPiece(piece);
-    piece.setPosition(toPos);
-
     this.clearAllHighlights();
 
     return true;
   }
 
-  public applyLegalMove(
+  public async applyLegalMove(
     from: Position,
     to: Position,
     flags: PlayedMoveFlags
-  ): ChessPieceType | undefined {
+  ): Promise<ChessPieceType | undefined> {
+    const fromSquare = this.getSquare(from);
+    const toSquare = this.getSquare(to);
+    const mover = fromSquare?.getPiece();
+    if (!fromSquare || !toSquare || !mover) {
+      return flags.capturedType;
+    }
+
+    let captured: Piece | null = null;
     if (flags.enPassant && flags.enPassantCapture) {
-      const captured = this.getSquare(flags.enPassantCapture)?.getPiece();
-      if (captured) {
-        this.removePiece(captured);
+      captured = this.getSquare(flags.enPassantCapture)?.getPiece() ?? null;
+    } else {
+      const occupant = toSquare.getPiece();
+      if (occupant && occupant !== mover) {
+        captured = occupant;
       }
     }
 
-    this.movePiece(from, to);
-
-    if (flags.castle && flags.rookFrom && flags.rookTo) {
-      this.movePiece(flags.rookFrom, flags.rookTo);
+    if (captured) {
+      this.unregisterPiece(captured);
     }
+
+    this.reassignPiece(mover, from, to);
+
+    let rook: Piece | null = null;
+    if (flags.castle && flags.rookFrom && flags.rookTo) {
+      rook = this.getSquare(flags.rookFrom)?.getPiece() ?? null;
+      if (rook) {
+        this.reassignPiece(rook, flags.rookFrom, flags.rookTo);
+      }
+    }
+
+    const animations: Promise<void>[] = [];
+    const moverMesh = mover.getMesh();
+    if (moverMesh) {
+      animations.push(animateMeshTo(moverMesh, this.worldPositionOnSquare(moverMesh, to)));
+    }
+    if (rook && flags.rookTo) {
+      const rookMesh = rook.getMesh();
+      if (rookMesh) {
+        animations.push(
+          animateMeshTo(rookMesh, this.worldPositionOnSquare(rookMesh, flags.rookTo))
+        );
+      }
+    }
+    if (captured) {
+      const capturedRef = captured;
+      const capturedMesh = capturedRef.getMesh();
+      if (capturedMesh) {
+        animations.push(
+          animateScaleToZero(capturedMesh).then(() => {
+            this.disposePieceMesh(capturedRef);
+          })
+        );
+      } else {
+        this.disposePieceMesh(capturedRef);
+      }
+    }
+
+    await Promise.all(animations);
 
     if (flags.promotion) {
       this.promotePiece(to, flags.promotion);
     }
 
     return flags.capturedType;
+  }
+
+  private worldPositionOnSquare(mesh: AbstractMesh, to: Position): BABYLON.Vector3 {
+    const square = this.getSquare(to);
+    if (!square) {
+      return mesh.position.clone();
+    }
+    const squareMesh = square.getMesh();
+    return new BABYLON.Vector3(squareMesh.position.x, mesh.position.y, squareMesh.position.z);
+  }
+
+  private reassignPiece(piece: Piece, from: Position, to: Position): void {
+    const fromSquare = this.getSquare(from);
+    const toSquare = this.getSquare(to);
+    if (fromSquare && fromSquare.getPiece() === piece) {
+      fromSquare.setPiece(null);
+    }
+    if (toSquare) {
+      toSquare.setPiece(piece);
+    }
+    piece.setPosition(to);
+    const type = piece.getType();
+    const pieceMap = this.piecesByType.get(type);
+    if (pieceMap) {
+      pieceMap.delete(`${from.x},${from.y}`);
+      pieceMap.set(`${to.x},${to.y}`, piece);
+    }
+    const mesh = piece.getMesh();
+    if (mesh && mesh.metadata) {
+      mesh.metadata.position = to;
+    }
+  }
+
+  private unregisterPiece(piece: Piece): void {
+    const position = piece.getPosition();
+    const square = this.getSquare(position);
+    if (square && square.getPiece() === piece) {
+      square.setPiece(null);
+    }
+    const type = piece.getType();
+    const pieceMap = this.piecesByType.get(type);
+    if (pieceMap) {
+      pieceMap.delete(`${position.x},${position.y}`);
+    }
+  }
+
+  private disposePieceMesh(piece: Piece): void {
+    const mesh = piece.getMesh();
+    if (mesh) {
+      mesh.metadata = null;
+      mesh.dispose();
+    }
   }
 
   public promotePiece(position: Position, type: ChessPieceType): void {
@@ -370,28 +465,8 @@ export class Board {
   }
 
   public removePiece(piece: Piece): void {
-    // Remove piece from its current square first
-    const position = piece.getPosition();
-    const square = this.getSquare(position);
-    if (square) {
-      square.setPiece(null);
-    }
-
-    // Remove the piece from piecesByType map
-    const type = piece.getType();
-    const pieceMap = this.piecesByType.get(type);
-    if (pieceMap) {
-      pieceMap.delete(`${position.x},${position.y}`);
-    }
-
-    // Remove the mesh from the scene last
-    const mesh = piece.getMesh();
-    if (mesh) {
-      // Clean up any metadata
-      mesh.metadata = null;
-      // Dispose of the mesh
-      mesh.dispose();
-    }
+    this.unregisterPiece(piece);
+    this.disposePieceMesh(piece);
   }
 
   public createInitialPieces(): void {

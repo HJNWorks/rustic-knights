@@ -13,14 +13,14 @@ Use **cursor-ide-browser** (`browser_navigate`, `browser_lock`, `browser_snapsho
 
 Lock the tab for the pass. Unlock when finished.
 
-## Phase 0 checklist
+## Phase 1 checklist
 
-1. Start Game (guest login if the modal appears). HUD shows White's turn.
-2. Legal quiet move (e2-e4). HUD shows Black's turn.
-3. Illegal click with a piece selected. Position and turn unchanged.
-4. Pause overlay on the still-mounted canvas. Resume. Same position.
-5. Castling: king and rook both move.
-6. Promotion chooser (or queen default). Mesh type changes.
+1. Start Game with no `fen` query. 32 pieces. HUD shows White's turn. URL has no `fen`.
+2. Open `?fen=` (sparse or mate), Main Menu, Start Game. Full board again. Picking works.
+3. Left-click e2 then e4. Piece lerps. HUD shows Black's turn. Camera tweens. Left click does not orbit.
+4. Illegal click with a piece selected. Position and turn unchanged.
+5. Pause overlay on the still-mounted canvas. Resume. Same position.
+6. `?fen=` promotion once. Chooser (or queen default). Mesh type changes. URL stripped.
 7. Checkmate overlay. Further board clicks ignored. Main menu returns.
 
 Coordinate mapping for the canvas lives in `frontend/src/game/rules/squares.ts`. If clicks miss squares, fix mapping and re-run this list.

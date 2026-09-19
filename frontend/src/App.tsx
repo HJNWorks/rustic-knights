@@ -3,6 +3,7 @@ import GameView from './components/GameView.tsx';
 import MainMenu from './components/MainMenu.tsx';
 import PauseMenu from './components/PauseMenu.tsx';
 import { AuthProvider } from './util/AuthContext.tsx';
+import { stripFenParam } from './util/fenQuery';
 import './App.css';
 
 type AppScreen = 'menu' | 'playing' | 'paused';
@@ -19,6 +20,7 @@ function App() {
   };
 
   const handleMainMenu = () => {
+    stripFenParam();
     setGameState('menu');
   };
 

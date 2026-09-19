@@ -4,6 +4,8 @@ import { Board } from './Board';
 import { setCurrentTurn } from './Piece';
 import { ChessGame } from '../rules/ChessGame';
 import { Position, PromotionRole, SquareHighlightState } from '../../types/chess';
+import { BOARD_OFFSET, BOARD_SIZE } from '../../util/constants';
+import { animateNumber, CAMERA_ANIMATION_FRAMES, shortestAngleTo } from '../rendering/tween';
 
 export interface GameState {
   currentTurn: 'white' | 'black';
@@ -34,7 +36,10 @@ export class GameScene {
   private fpsElement: HTMLDivElement | null = null;
   private paused = false;
   private interactionLocked = false;
+  private animating = false;
   private pendingPromotion: { from: Position; to: Position } | null = null;
+  private whiteCameraDefaults = { alpha: 0, beta: 0, radius: 0 };
+  private blackCameraDefaults = { alpha: 0, beta: 0, radius: 0 };
   private gameState: GameState = {
     currentTurn: 'white',
     turnCount: 1,
@@ -55,9 +60,7 @@ export class GameScene {
     this.scene.metadata.board = this.board;
 
     this.chessGame = new ChessGame(fen);
-    if (fen) {
-      this.board.replaceAllPieces(this.chessGame.placedPieces());
-    }
+    this.board.replaceAllPieces(this.chessGame.placedPieces());
     this.updateGameState({
       currentTurn: this.chessGame.getCurrentTurn(),
       turnCount: 1,
@@ -98,7 +101,7 @@ export class GameScene {
     const { from, to } = this.pendingPromotion;
     this.pendingPromotion = null;
     this.interactionLocked = false;
-    this.commitMove(from, to, role);
+    void this.commitMove(from, to, role);
   }
 
   public getScene(): BABYLON.Scene {
@@ -135,16 +138,6 @@ export class GameScene {
     light.intensity = 0.7;
     scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.3, 1);
     return scene;
-  }
-
-  private resolvePieceMesh(mesh: BABYLON.AbstractMesh): BABYLON.AbstractMesh {
-    if (this.board.isPiece(mesh)) {
-      return mesh;
-    }
-    if (mesh.parent && this.board.isPiece(mesh.parent as BABYLON.AbstractMesh)) {
-      return mesh.parent as BABYLON.AbstractMesh;
-    }
-    return mesh;
   }
 
   private handlePieceSelection(mesh: BABYLON.AbstractMesh): void {
@@ -203,53 +196,61 @@ export class GameScene {
       if (this.onPromotionNeeded) {
         this.onPromotionNeeded(from, to);
       } else {
-        this.commitMove(from, to, 'queen');
+        void this.commitMove(from, to, 'queen');
       }
       return;
     }
-    this.commitMove(from, to, promotion);
+    void this.commitMove(from, to, promotion);
   }
 
-  private commitMove(from: Position, to: Position, promotion?: PromotionRole): void {
+  private async commitMove(from: Position, to: Position, promotion?: PromotionRole): Promise<void> {
     const result = this.chessGame.play(from, to, promotion);
     if (!result.valid || !result.flags) {
       this.cancelSelection();
       return;
     }
 
-    const capturedType = this.board.applyLegalMove(from, to, result.flags);
-    if (capturedType) {
-      const value = this.getPieceValue(capturedType);
-      if (this.gameState.currentTurn === 'white') {
-        this.updateGameState({ whiteScore: this.gameState.whiteScore + value });
-      } else {
-        this.updateGameState({ blackScore: this.gameState.blackScore + value });
-      }
-    }
-
-    const newTurn = this.chessGame.getCurrentTurn();
-    const isNewTurn = newTurn !== this.gameState.currentTurn;
-    this.updateGameState({
-      currentTurn: newTurn,
-      turnCount:
-        isNewTurn && newTurn === 'white' ? this.gameState.turnCount + 1 : this.gameState.turnCount,
-    });
-
-    this.board.clearAllHighlights();
-    this.board.highlightLastMove(from, to);
-    if (this.chessGame.isCheck()) {
-      this.board.highlightKingInCheck(newTurn);
-    }
-
-    if (isNewTurn) {
-      this.flipCamera();
-    }
-    setCurrentTurn(newTurn);
+    this.animating = true;
     this.selectedPiece = null;
+    this.board.clearAllHighlights();
 
-    if (result.outcome && this.onGameOver) {
-      this.interactionLocked = true;
-      this.onGameOver(result.outcome);
+    try {
+      const capturedType = await this.board.applyLegalMove(from, to, result.flags);
+      if (capturedType) {
+        const value = this.getPieceValue(capturedType);
+        if (this.gameState.currentTurn === 'white') {
+          this.updateGameState({ whiteScore: this.gameState.whiteScore + value });
+        } else {
+          this.updateGameState({ blackScore: this.gameState.blackScore + value });
+        }
+      }
+
+      const newTurn = this.chessGame.getCurrentTurn();
+      const isNewTurn = newTurn !== this.gameState.currentTurn;
+      this.updateGameState({
+        currentTurn: newTurn,
+        turnCount:
+          isNewTurn && newTurn === 'white'
+            ? this.gameState.turnCount + 1
+            : this.gameState.turnCount,
+      });
+
+      this.board.highlightLastMove(from, to);
+      if (this.chessGame.isCheck()) {
+        this.board.highlightKingInCheck(newTurn);
+      }
+
+      if (isNewTurn) {
+        await this.flipCamera();
+      }
+      setCurrentTurn(newTurn);
+
+      if (result.outcome && this.onGameOver) {
+        this.interactionLocked = true;
+        this.onGameOver(result.outcome);
+      }
+    } finally {
+      this.animating = false;
     }
   }
 
@@ -275,36 +276,60 @@ export class GameScene {
     this.selectedPiece = null;
   }
 
+  private pickBoardPosition(): Position | null {
+    const camera = this.scene.activeCamera;
+    if (!camera) {
+      return null;
+    }
+    const ray = this.scene.createPickingRay(
+      this.scene.pointerX,
+      this.scene.pointerY,
+      BABYLON.Matrix.Identity(),
+      camera
+    );
+    const plane = BABYLON.Plane.FromPositionAndNormal(
+      new BABYLON.Vector3(0, 0.15, 0),
+      BABYLON.Vector3.Up()
+    );
+    const distance = ray.intersectsPlane(plane);
+    if (distance === null) {
+      return null;
+    }
+    const hit = ray.origin.add(ray.direction.scale(distance));
+    const file = Math.floor(hit.x + BOARD_OFFSET);
+    const rank = Math.floor(hit.z + BOARD_OFFSET);
+    if (file < 0 || file >= BOARD_SIZE || rank < 0 || rank >= BOARD_SIZE) {
+      return null;
+    }
+    return { x: file, y: rank };
+  }
+
   private setupEventHandlers(): void {
-    this.scene.onPointerDown = (_evt, pickInfo) => {
-      if (this.paused || this.interactionLocked || this.chessGame.isEnded()) {
+    this.scene.onPointerDown = () => {
+      if (this.paused || this.interactionLocked || this.animating || this.chessGame.isEnded()) {
         return;
       }
-      if (!pickInfo?.hit) {
+      const boardPos = this.pickBoardPosition();
+      if (!boardPos) {
         this.cancelSelection();
         return;
       }
-      if (!pickInfo.pickedMesh) {
-        return;
-      }
-      const pickedMesh = this.resolvePieceMesh(pickInfo.pickedMesh);
-      if (pickedMesh.name === 'ground' || pickedMesh.name.startsWith('extended_')) {
+      const square = this.board.getSquare(boardPos);
+      if (!square) {
         this.cancelSelection();
         return;
       }
-      if (this.board.isPiece(pickedMesh)) {
-        const pos = this.board.getSquarePosition(pickedMesh);
-        const color = this.board.getPieceColorFromMesh(pickedMesh);
-        if (this.selectedPiece && pos && color && color !== this.chessGame.getCurrentTurn()) {
-          const square = this.board.getSquare(pos);
-          if (square) {
-            this.handleSquareSelection(square.getMesh());
-            return;
-          }
+      const occupant = square.getPiece();
+      if (occupant) {
+        const mesh = occupant.getMesh();
+        const color = occupant.getColor();
+        if (this.selectedPiece && color !== this.chessGame.getCurrentTurn()) {
+          this.handleSquareSelection(square.getMesh());
+          return;
         }
-        this.handlePieceSelection(pickedMesh);
+        this.handlePieceSelection(mesh);
       } else {
-        this.handleSquareSelection(pickedMesh);
+        this.handleSquareSelection(square.getMesh());
       }
     };
   }
@@ -342,6 +367,19 @@ export class GameScene {
     blackCamera.lowerAlphaLimit = 0;
     blackCamera.upperAlphaLimit = Math.PI;
 
+    this.applyOrbitInput(whiteCamera);
+    this.applyOrbitInput(blackCamera);
+    this.whiteCameraDefaults = {
+      alpha: whiteCamera.alpha,
+      beta: whiteCamera.beta,
+      radius: whiteCamera.radius,
+    };
+    this.blackCameraDefaults = {
+      alpha: blackCamera.alpha,
+      beta: blackCamera.beta,
+      radius: blackCamera.radius,
+    };
+
     whiteCamera.attachControl(this.canvas, true);
     scene.activeCamera = whiteCamera;
 
@@ -353,32 +391,69 @@ export class GameScene {
     scene.metadata.currentCamera = 'white';
   }
 
-  private flipCamera(): void {
+  private applyOrbitInput(camera: BABYLON.ArcRotateCamera): void {
+    camera.panningSensibility = 0;
+    const pointers = camera.inputs.attached.pointers as unknown as
+      | { buttons: number[] }
+      | undefined;
+    if (pointers) {
+      pointers.buttons = [1, 2];
+    }
+  }
+
+  private async flipCamera(): Promise<void> {
     if (!this.scene.metadata) {
       return;
     }
 
     const whiteCamera = this.scene.metadata.whiteCamera as BABYLON.ArcRotateCamera;
     const blackCamera = this.scene.metadata.blackCamera as BABYLON.ArcRotateCamera;
-    const currentCamera = this.scene.metadata.currentCamera;
+    const currentCamera = this.scene.metadata.currentCamera as 'white' | 'black';
 
     if (!whiteCamera || !blackCamera) {
       return;
     }
 
-    if (this.scene.activeCamera) {
-      (this.scene.activeCamera as BABYLON.ArcRotateCamera).detachControl();
-    }
+    const outgoing = currentCamera === 'white' ? whiteCamera : blackCamera;
+    const incoming = currentCamera === 'white' ? blackCamera : whiteCamera;
+    const incomingDefaults =
+      currentCamera === 'white' ? this.blackCameraDefaults : this.whiteCameraDefaults;
+    const incomingSide = currentCamera === 'white' ? 'black' : 'white';
 
-    if (currentCamera === 'white') {
-      this.scene.activeCamera = blackCamera;
-      blackCamera.attachControl(this.canvas, true);
-      this.scene.metadata.currentCamera = 'black';
+    outgoing.detachControl();
+
+    incoming.lowerAlphaLimit = Number.NEGATIVE_INFINITY;
+    incoming.upperAlphaLimit = Number.POSITIVE_INFINITY;
+    incoming.alpha = outgoing.alpha;
+    incoming.beta = outgoing.beta;
+    incoming.radius = outgoing.radius;
+    this.scene.activeCamera = incoming;
+
+    const targetAlpha = shortestAngleTo(incoming.alpha, incomingDefaults.alpha);
+    await Promise.all([
+      animateNumber(incoming, 'alpha', targetAlpha, CAMERA_ANIMATION_FRAMES, this.scene),
+      animateNumber(incoming, 'beta', incomingDefaults.beta, CAMERA_ANIMATION_FRAMES, this.scene),
+      animateNumber(
+        incoming,
+        'radius',
+        incomingDefaults.radius,
+        CAMERA_ANIMATION_FRAMES,
+        this.scene
+      ),
+    ]);
+
+    incoming.alpha = incomingDefaults.alpha;
+    incoming.beta = incomingDefaults.beta;
+    incoming.radius = incomingDefaults.radius;
+    if (incomingSide === 'white') {
+      incoming.lowerAlphaLimit = Math.PI;
+      incoming.upperAlphaLimit = 2 * Math.PI;
     } else {
-      this.scene.activeCamera = whiteCamera;
-      whiteCamera.attachControl(this.canvas, true);
-      this.scene.metadata.currentCamera = 'white';
+      incoming.lowerAlphaLimit = 0;
+      incoming.upperAlphaLimit = Math.PI;
     }
+    incoming.attachControl(this.canvas, true);
+    this.scene.metadata.currentCamera = incomingSide;
   }
 
   private setupFPSDisplay(): void {

@@ -2,11 +2,11 @@
 
 ## Current
 
-The main menu **Start Game** starts local hot-seat even if guest login against the Rust API fails.
+The main menu **Start Game** starts local hot-seat even if guest login against the Rust API fails. Meshes come from `chessGame.placedPieces()`, not a second layout table.
 
 | Mode | Status |
 |------|--------|
-| Local hot-seat (vs self) | Working. Camera flips after each legal ply. Rules via chessops |
+| Local hot-seat (vs self) | Working. Camera tweens after each legal ply. Rules via chessops |
 | Vs bot | Not present (Phase 2) |
 | Vs other user | Not present (Phase 4) |
 | Settings / How to Play | Buttons with no handlers |
@@ -16,7 +16,7 @@ The main menu **Start Game** starts local hot-seat even if guest login against t
 
 HUD: turn count, current color, elapsed wall-clock, material score, FPS, Pause.
 
-Optional FEN: `http://localhost:5173/?fen=...` loads that position for the next Start Game (read when `GameView` mounts).
+Optional FEN: `http://localhost:5173/?fen=...` is consumed once when `GameView` mounts, then stripped from the URL. Main Menu also strips `fen`. The next Start Game is a full 32-piece start unless a new `?fen=` is opened.
 
 App screens: `menu | playing | paused`. `playing` and `paused` both keep `GameView` mounted.
 

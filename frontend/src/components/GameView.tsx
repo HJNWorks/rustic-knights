@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as BABYLON from '@babylonjs/core';
 import { createGameScene, GameScene, GameState } from '../game/elements/GameScene';
 import type { Position, PromotionRole } from '../types/chess';
+import { consumeFenParam } from '../util/fenQuery';
 
 interface GameViewProps {
   onPause: () => void;
@@ -25,8 +26,7 @@ function GameView({ onPause, onMainMenu, paused = false }: GameViewProps) {
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const fen = params.get('fen') || undefined;
+    const fen = consumeFenParam();
     const engine = new BABYLON.Engine(canvasRef.current, true);
     const scene = createGameScene(
       engine,

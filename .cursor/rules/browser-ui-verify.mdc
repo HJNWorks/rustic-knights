@@ -1,0 +1,15 @@
+---
+description: Verify rustic-knights UI in cursor-ide-browser against the Vite app
+alwaysApply: true
+---
+
+# Browser UI verification (Rustic Knights)
+
+After UI, HUD, overlay, or board-picking changes, start `npm run dev` and open [http://localhost:5173/](http://localhost:5173/) with **cursor-ide-browser**. Do not wait on the Rust backend for local play.
+
+- Menus, pause, promotion, game-over: `browser_snapshot` then click refs.
+- The board is a Babylon **canvas**. Pieces will not appear in the accessibility tree. Screenshot, then `browser_mouse_click_xy` on square centers. Confirm with HUD turn text and another screenshot.
+- Exercise at least: Start Game, one legal move, one illegal click, pause/resume without remounting.
+- Playwright MCP is the fallback. If no browser MCP is attached, say so.
+
+See `docs/git/browser-qa.md`.

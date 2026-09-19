@@ -1,22 +1,17 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import GameView from './components/GameView.tsx';
 import MainMenu from './components/MainMenu.tsx';
 import PauseMenu from './components/PauseMenu.tsx';
 import { AuthProvider } from './util/AuthContext.tsx';
+import { stripFenParam } from './util/fenQuery';
 import './App.css';
-import { ChessGame } from './game/rules/ChessGame';
 
-type GameState = 'menu' | 'playing' | 'paused';
+type AppScreen = 'menu' | 'playing' | 'paused';
 
 function App() {
-  const [gameState, setGameState] = useState<GameState>('menu');
-  const gameInstanceRef = useRef<{ chessGame: ChessGame | null }>({ chessGame: null });
+  const [gameState, setGameState] = useState<AppScreen>('menu');
 
   const handlePause = () => {
-    if (gameInstanceRef.current.chessGame) {
-      gameInstanceRef.current.chessGame.saveGameState();
-      console.log('Game state saved before pausing');
-    }
     setGameState('paused');
   };
 
@@ -25,7 +20,7 @@ function App() {
   };
 
   const handleMainMenu = () => {
-    gameInstanceRef.current.chessGame = null;
+    stripFenParam();
     setGameState('menu');
   };
 
@@ -33,16 +28,17 @@ function App() {
     <AuthProvider>
       <div className="app">
         {gameState === 'menu' && <MainMenu onStartGame={() => setGameState('playing')} />}
-        {gameState === 'playing' && (
-          <GameView 
+        {(gameState === 'playing' || gameState === 'paused') && (
+          <GameView
             onPause={handlePause}
+            onMainMenu={handleMainMenu}
+            paused={gameState === 'paused'}
           />
         )}
         {gameState === 'paused' && (
-          <PauseMenu
-            onResume={handleResume}
-            onMainMenu={handleMainMenu}
-          />
+          <div className="overlay-layer">
+            <PauseMenu onResume={handleResume} onMainMenu={handleMainMenu} />
+          </div>
         )}
       </div>
     </AuthProvider>

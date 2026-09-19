@@ -1,6 +1,5 @@
 debug/
 target/
-Cargo.lock
 **/*.rs.bk
 *.pdb
 
@@ -11,4 +10,10 @@ Cargo.lock
 *.pth
 assets/editor/*
 assets/editor
-.cursor
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+
+.env
+.env.local
+backend/.env

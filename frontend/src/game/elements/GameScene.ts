@@ -76,6 +76,11 @@ export class GameScene {
     }
     if (hooks.onGameOver) {
       this.onGameOver = hooks.onGameOver;
+      const outcome = this.chessGame.outcome();
+      if (outcome) {
+        this.interactionLocked = true;
+        this.onGameOver(outcome);
+      }
     }
   }
 

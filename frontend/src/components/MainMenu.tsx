@@ -15,14 +15,9 @@ function MainMenu({ onStartGame }: MainMenuProps) {
   const [authModalState, setAuthModalState] = useState<AuthModalState>('closed');
 
   const handleStartGame = () => {
-    if (!isAuthenticated && !loading) {
-      guestLogin()
-        .catch(() => undefined)
-        .finally(() => {
-          onStartGame();
-        });
-    } else {
-      onStartGame();
+    onStartGame();
+    if (!isAuthenticated) {
+      void guestLogin();
     }
   };
 

@@ -1,6 +1,6 @@
 import { Chess, castlingSide } from 'chessops/chess';
 import { parseFen, makeFen } from 'chessops/fen';
-import { makeUci, rookCastlesTo, squareRank } from 'chessops/util';
+import { makeUci, parseUci, rookCastlesTo, squareRank } from 'chessops/util';
 import type { Move, Role } from 'chessops/types';
 import type {
   ChessColor,
@@ -141,6 +141,16 @@ export class ChessGame {
       flags,
       outcome,
     };
+  }
+
+  public playUci(uci: string): MoveResult {
+    const parsed = parseUci(uci);
+    if (!parsed || !('from' in parsed)) {
+      return { valid: false, message: 'Invalid UCI' };
+    }
+    const promotion =
+      'promotion' in parsed && parsed.promotion ? (parsed.promotion as PromotionRole) : undefined;
+    return this.play(squareToPosition(parsed.from), squareToPosition(parsed.to), promotion);
   }
 
   public getGameNotation(): string {

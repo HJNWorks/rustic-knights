@@ -1,3 +1,10 @@
+export type PlayMode = 'hotseat' | 'bot';
+
+export interface GameOptions {
+  mode: PlayMode;
+  skillLevel?: number;
+}
+
 export type ChessPieceType = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
 export type ChessColor = 'white' | 'black';
 export type PromotionRole = 'queen' | 'rook' | 'bishop' | 'knight';

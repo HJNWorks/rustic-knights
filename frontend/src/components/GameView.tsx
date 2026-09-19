@@ -1,16 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as BABYLON from '@babylonjs/core';
 import { createGameScene, GameScene, GameState } from '../game/elements/GameScene';
-import type { Position, PromotionRole } from '../types/chess';
+import type { GameOptions, Position, PromotionRole } from '../types/chess';
 import { consumeFenParam } from '../util/fenQuery';
 
 interface GameViewProps {
   onPause: () => void;
   onMainMenu: () => void;
   paused?: boolean;
+  gameOptions: GameOptions;
 }
 
-function GameView({ onPause, onMainMenu, paused = false }: GameViewProps) {
+function GameView({ onPause, onMainMenu, paused = false, gameOptions }: GameViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameSceneRef = useRef<GameScene | null>(null);
   const [fps, setFps] = useState<number>(0);
@@ -20,6 +21,7 @@ function GameView({ onPause, onMainMenu, paused = false }: GameViewProps) {
     timeElapsed: 0,
     whiteScore: 0,
     blackScore: 0,
+    botThinking: false,
   });
   const [promotion, setPromotion] = useState<{ from: Position; to: Position } | null>(null);
   const [gameOver, setGameOver] = useState<string | null>(null);
@@ -41,7 +43,8 @@ function GameView({ onPause, onMainMenu, paused = false }: GameViewProps) {
         onPromotionNeeded: (from, to) => setPromotion({ from, to }),
         onGameOver: (result) => setGameOver(result),
       },
-      fen
+      fen,
+      gameOptions
     );
     gameSceneRef.current = scene.metadata.gameSceneInstance as GameScene;
 
@@ -70,10 +73,11 @@ function GameView({ onPause, onMainMenu, paused = false }: GameViewProps) {
       window.removeEventListener('resize', handleResize);
       window.clearInterval(timer);
       window.clearInterval(fpsInterval);
-      engine.dispose();
+      gameSceneRef.current?.dispose();
       gameSceneRef.current = null;
+      engine.dispose();
     };
-  }, []);
+  }, [gameOptions]);
 
   useEffect(() => {
     gameSceneRef.current?.setPaused(paused);
@@ -106,6 +110,7 @@ function GameView({ onPause, onMainMenu, paused = false }: GameViewProps) {
               {gameState.currentTurn.charAt(0).toUpperCase() + gameState.currentTurn.slice(1)}'s
               Turn
             </span>
+            {gameState.botThinking && <span className="bot-thinking">Bot thinking</span>}
           </div>
           <div className="timer">Time: {formatTime(gameState.timeElapsed)}</div>
           <div className="score">

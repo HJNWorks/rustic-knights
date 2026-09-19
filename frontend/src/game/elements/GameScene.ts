@@ -3,9 +3,10 @@ import * as BABYLON from '@babylonjs/core';
 import { Board } from './Board';
 import { setCurrentTurn } from './Piece';
 import { ChessGame } from '../rules/ChessGame';
-import { Position, PromotionRole, SquareHighlightState } from '../../types/chess';
+import { Position, PromotionRole, GameOptions, MoveResult } from '../../types/chess';
 import { BOARD_OFFSET, BOARD_SIZE } from '../../util/constants';
 import { animateNumber, CAMERA_ANIMATION_FRAMES, shortestAngleTo } from '../rendering/tween';
+import { StockfishEngine } from '../engine/StockfishEngine';
 
 export interface GameState {
   currentTurn: 'white' | 'black';
@@ -13,6 +14,7 @@ export interface GameState {
   timeElapsed: number;
   whiteScore: number;
   blackScore: number;
+  botThinking: boolean;
 }
 
 export type GameStateUpdateCallback = (gameState: GameState) => void;
@@ -38,6 +40,10 @@ export class GameScene {
   private interactionLocked = false;
   private animating = false;
   private pendingPromotion: { from: Position; to: Position } | null = null;
+  private playMode: GameOptions['mode'] = 'hotseat';
+  private skillLevel = 5;
+  private stockfish: StockfishEngine | null = null;
+  private disposed = false;
   private whiteCameraDefaults = { alpha: 0, beta: 0, radius: 0 };
   private blackCameraDefaults = { alpha: 0, beta: 0, radius: 0 };
   private gameState: GameState = {
@@ -46,11 +52,19 @@ export class GameScene {
     timeElapsed: 0,
     whiteScore: 0,
     blackScore: 0,
+    botThinking: false,
   };
 
-  constructor(engine: BABYLON.Engine, canvas: HTMLCanvasElement, fen?: string) {
+  constructor(
+    engine: BABYLON.Engine,
+    canvas: HTMLCanvasElement,
+    fen?: string,
+    options?: GameOptions
+  ) {
     this.engine = engine;
     this.canvas = canvas;
+    this.playMode = options?.mode ?? 'hotseat';
+    this.skillLevel = options?.skillLevel ?? 5;
     this.scene = this.createScene();
     this.board = new Board(this.scene);
 
@@ -85,6 +99,16 @@ export class GameScene {
         this.onGameOver(outcome);
       }
     }
+    if (this.playMode === 'bot') {
+      void this.maybeRequestBotMove();
+    }
+  }
+
+  public dispose(): void {
+    this.disposed = true;
+    this.stockfish?.dispose();
+    this.stockfish = null;
+    this.scene.onPointerDown = undefined;
   }
 
   public setPaused(paused: boolean): void {
@@ -178,9 +202,9 @@ export class GameScene {
       return;
     }
 
-    const isValidMoveSquare = this.board.isValidMoveSquare(toSquarePos);
-    const isEndangeredSquare = toSquare.getHighlightState() === SquareHighlightState.ENDANGERED;
-    if (!isValidMoveSquare && !isEndangeredSquare) {
+    const dests = this.chessGame.legalDests(fromSquarePos);
+    const isLegal = dests.some((dest) => dest.x === toSquarePos.x && dest.y === toSquarePos.y);
+    if (!isLegal) {
       this.cancelSelection();
       return;
     }
@@ -205,11 +229,20 @@ export class GameScene {
 
   private async commitMove(from: Position, to: Position, promotion?: PromotionRole): Promise<void> {
     const result = this.chessGame.play(from, to, promotion);
-    if (!result.valid || !result.flags) {
+    await this.presentMove(result);
+    if (this.playMode === 'bot') {
+      void this.maybeRequestBotMove();
+    }
+  }
+
+  private async presentMove(result: MoveResult): Promise<void> {
+    if (!result.valid || !result.flags || !result.from || !result.to) {
       this.cancelSelection();
       return;
     }
 
+    const from = result.from;
+    const to = result.to;
     this.animating = true;
     this.selectedPiece = null;
     this.board.clearAllHighlights();
@@ -240,7 +273,7 @@ export class GameScene {
         this.board.highlightKingInCheck(newTurn);
       }
 
-      if (isNewTurn) {
+      if (isNewTurn && this.playMode === 'hotseat') {
         await this.flipCamera();
       }
       setCurrentTurn(newTurn);
@@ -251,6 +284,47 @@ export class GameScene {
       }
     } finally {
       this.animating = false;
+    }
+    if (this.playMode === 'bot') {
+      void this.maybeRequestBotMove();
+    }
+  }
+
+  private async maybeRequestBotMove(): Promise<void> {
+    if (this.playMode !== 'bot') {
+      return;
+    }
+    if (this.disposed || this.chessGame.isEnded()) {
+      return;
+    }
+    if (this.chessGame.getCurrentTurn() !== 'black') {
+      return;
+    }
+    if (this.gameState.botThinking) {
+      return;
+    }
+
+    this.updateGameState({ botThinking: true });
+    try {
+      if (!this.stockfish) {
+        this.stockfish = new StockfishEngine();
+      }
+      await this.stockfish.init(this.skillLevel);
+      if (this.disposed) {
+        return;
+      }
+      const uci = await this.stockfish.go(this.chessGame.fen());
+      if (this.disposed) {
+        return;
+      }
+      const result = this.chessGame.playUci(uci);
+      await this.presentMove(result);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      if (!this.disposed) {
+        this.updateGameState({ botThinking: false });
+      }
     }
   }
 
@@ -307,6 +381,12 @@ export class GameScene {
   private setupEventHandlers(): void {
     this.scene.onPointerDown = () => {
       if (this.paused || this.interactionLocked || this.animating || this.chessGame.isEnded()) {
+        return;
+      }
+      if (this.gameState.botThinking) {
+        return;
+      }
+      if (this.playMode === 'bot' && this.chessGame.getCurrentTurn() !== 'white') {
         return;
       }
       const boardPos = this.pickBoardPosition();
@@ -369,6 +449,8 @@ export class GameScene {
 
     this.applyOrbitInput(whiteCamera);
     this.applyOrbitInput(blackCamera);
+    whiteCamera.fov = 0.8;
+    blackCamera.fov = 0.8;
     this.whiteCameraDefaults = {
       alpha: whiteCamera.alpha,
       beta: whiteCamera.beta,
@@ -480,9 +562,10 @@ export const createGameScene = (
   engine: BABYLON.Engine,
   canvas: HTMLCanvasElement,
   hooks?: GameSceneHooks,
-  fen?: string
+  fen?: string,
+  options?: GameOptions
 ): BABYLON.Scene => {
-  const gameScene = new GameScene(engine, canvas, fen);
+  const gameScene = new GameScene(engine, canvas, fen, options);
   if (hooks) {
     gameScene.setHooks(hooks);
   }

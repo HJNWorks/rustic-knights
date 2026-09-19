@@ -261,6 +261,11 @@
     text-shadow: 0 0 3px #fff;
   }
 
+  .bot-thinking {
+    color: #ffb347;
+    font-weight: bold;
+  }
+
   .timer {
     font-family: monospace;
     font-size: 1.2rem;
@@ -366,6 +371,34 @@
     max-height: 85vh;
     padding: 25px;
     animation: contentShow 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .info-modal {
+    max-width: 440px;
+    color: #e0e0e0;
+  }
+
+  .info-title {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: #cc5500;
+    text-align: center;
+    font-size: 1.4rem;
+  }
+
+  .info-copy {
+    margin: 0 0 16px 0;
+    line-height: 1.45;
+  }
+
+  .info-list {
+    margin: 0 0 20px 0;
+    padding-left: 1.2rem;
+    line-height: 1.5;
+  }
+
+  .info-list li {
+    margin-bottom: 8px;
   }
 
   .auth-form {

@@ -2,7 +2,7 @@
 
 Source: `GameScene.setupCamera()`. Two `ArcRotateCamera` instances, target `Vector3.Zero()`.
 
-Babylon `ArcRotateCamera` uses perspective projection. **`fov` is never assigned.** Default in Babylon.js 6 is `0.8` radians (the `Camera.FOVMODE_VERTICAL_FIXED` default). Treat 0.8 as the current FOV until a measured value is logged from a running scene.
+Babylon `ArcRotateCamera` uses perspective projection. Both cameras set **`fov = 0.8`** radians (`Camera.FOVMODE_VERTICAL_FIXED` default, assigned explicitly so a Babylon upgrade does not change framing).
 
 ## Shared limits (both cameras)
 
@@ -11,6 +11,7 @@ Babylon `ArcRotateCamera` uses perspective projection. **`fov` is never assigned
 | Constructor alpha | `Math.PI / 2` |
 | Constructor beta | `Math.PI / 3` |
 | Constructor radius | `12` |
+| `fov` | `0.8` |
 | `lowerRadiusLimit` | `8` |
 | `upperRadiusLimit` | `20` |
 | `lowerBetaLimit` | `0.1` |
@@ -47,10 +48,9 @@ scene.metadata.currentCamera  // 'white' | 'black'
 
 ## Target
 
-- Document and optionally set `camera.fov = 0.8` explicitly on both cameras so upgrades of Babylon do not silently change framing
 - Keep radius 8-20 and beta cap. These define the "tabletop" feel
-- If Phase 1 tweens a single camera instead of swapping, preserve the two rest poses `(0, 8, -12)` and `(0, 8, 12)` as endpoints
-- Vs-bot / vs-human: lock to the local player's camera. Do not flip unless the user enables hot-seat
+- Hot-seat: tween between the two rest poses `(0, 8, -12)` and `(0, 8, 12)`
+- Vs-bot: stay on WhiteCamera. Do not flip
 - Wheel zoom is ArcRotate default (radius). Do not add FPS camera or orthographic mode in v1
 
 ## Not used

@@ -17,3 +17,4 @@ assets/editor
 .env
 .env.local
 backend/.env
+frontend/public/stockfish/

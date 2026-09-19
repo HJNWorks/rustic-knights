@@ -26,7 +26,10 @@ export default [
         HTMLCanvasElement: "readonly",
         CanvasRenderingContext2D: "readonly",
         URLSearchParams: "readonly",
-        HTMLDivElement: "readonly"
+        HTMLDivElement: "readonly",
+        Worker: "readonly",
+        URL: "readonly",
+        MessageEvent: "readonly"
       }
     },
     plugins: {
